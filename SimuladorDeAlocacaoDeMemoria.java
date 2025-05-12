@@ -9,31 +9,26 @@ public class SimuladorDeAlocacaoDeMemoria extends JFrame {
     private final List<BlocoDeMemoria> blocosDeMemoria;
     private final List<Processo> processos;
     private final JPanel painelDeMemoria;
-    private final JButton botaoDeAlocacao, botaoReset, botaoSimularES; //IO = input output, buzeta
-    private final JTextField campoNome, campoTamanho;
-    private final JLabel rotuloStatusMemoria;
-    private int proximoIndiceDeEncaixe = 0;
+    private final JPanel painelEstadoProcessos;
+    private final JButton botaoDeAlocacao, botaoReset, botaoSimularES;
+    private final JTextField campoNome, campoTamanho, campoPrioridade, campoTempo;
+    private final JLabel rotuloStatusMemoria, rotuloFalhaDePagina;
+    private int falhasDePagina = 0;
 
-    private SimuladorDeAlocacaoDeMemoria() {
+    public SimuladorDeAlocacaoDeMemoria() {
         super("Simulador de Alocação de Memória");
         setLayout(new BorderLayout());
 
-        opcoesEstrategia = new JComboBox<>(new String[]{
-                "primeiro encaixe", "melhor encaixe", "pior encaixe", "próximo encaixe"
-        });
+        opcoesEstrategia = new JComboBox<>(new String[] { "paginação" });
 
         modeloListaDeProcessos = new DefaultListModel<>();
-        blocosDeMemoria = new ArrayList<>(Arrays.asList(
-                new BlocoDeMemoria(0, 100),
-                new BlocoDeMemoria(1, 150),
-                new BlocoDeMemoria(2, 200),
-                new BlocoDeMemoria(3, 250),
-                new BlocoDeMemoria(4, 300),
-                new BlocoDeMemoria(5, 350)
-        ));
+        blocosDeMemoria = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            blocosDeMemoria.add(new BlocoDeMemoria(i, 50));
+        }
+
         processos = new ArrayList<>();
 
-        // Painel de entrada
         JPanel painelDeInsersao = new JPanel(new GridLayout(2, 1));
         JPanel painelDeProcesso = new JPanel();
         painelDeProcesso.add(new JLabel("Nome:"));
@@ -42,11 +37,17 @@ public class SimuladorDeAlocacaoDeMemoria extends JFrame {
         painelDeProcesso.add(new JLabel("Tamanho:"));
         campoTamanho = new JTextField(5);
         painelDeProcesso.add(campoTamanho);
+        painelDeProcesso.add(new JLabel("Prioridade:"));
+        campoPrioridade = new JTextField(3);
+        painelDeProcesso.add(campoPrioridade);
+        painelDeProcesso.add(new JLabel("Tempo:"));
+        campoTempo = new JTextField(3);
+        painelDeProcesso.add(campoTempo);
         botaoDeAlocacao = new JButton("Alocar");
         painelDeProcesso.add(botaoDeAlocacao);
         botaoReset = new JButton("Reiniciar");
         painelDeProcesso.add(botaoReset);
-        botaoSimularES = new JButton("Simular E/S Bloquear");
+        botaoSimularES = new JButton("Simular E/S");
         painelDeProcesso.add(botaoSimularES);
         painelDeInsersao.add(painelDeProcesso);
 
@@ -57,168 +58,173 @@ public class SimuladorDeAlocacaoDeMemoria extends JFrame {
 
         add(painelDeInsersao, BorderLayout.NORTH);
 
-        // Painel de memória
         painelDeMemoria = new JPanel() {
             protected void paintComponent(Graphics g) {
                 super.paintComponent(g);
                 desenharBlocosDeMemoria(g);
             }
         };
-        painelDeMemoria.setPreferredSize(new Dimension(600, 400));
+        painelDeMemoria.setPreferredSize(new Dimension(600, 500));
         add(painelDeMemoria, BorderLayout.CENTER);
 
-        // Lista de processos
         JList<String> listaDeProcessos = new JList<>(modeloListaDeProcessos);
         add(new JScrollPane(listaDeProcessos), BorderLayout.EAST);
 
-        // Status da memória
-        rotuloStatusMemoria = new JLabel("Memória: Total: 0KB | Ocupado: 0KB | Livre: 0KB");
-        add(rotuloStatusMemoria, BorderLayout.SOUTH);
+        rotuloStatusMemoria = new JLabel();
+        rotuloFalhaDePagina = new JLabel("Falha de Paginas: 0");
+        JPanel painelInferior = new JPanel(new GridLayout(2, 1));
+        painelInferior.add(rotuloStatusMemoria);
+        painelInferior.add(rotuloFalhaDePagina);
+        add(painelInferior, BorderLayout.SOUTH);
 
-        // Ações
+        painelEstadoProcessos = new JPanel(new GridLayout(0, 1));
+        add(new JScrollPane(painelEstadoProcessos), BorderLayout.WEST);
+
         botaoDeAlocacao.addActionListener(e -> {
-            String nome = campoNome.getText().trim();
-            int tamanho;
             try {
-                tamanho = Integer.parseInt(campoTamanho.getText().trim());
-            } catch (NumberFormatException ex) {
-                JOptionPane.showMessageDialog(this, "Tamanho inválido.");
-                return;
-            }
-            String estrategia = (String) opcoesEstrategia.getSelectedItem();
-            Processo p = new Processo(nome, tamanho);
-            processos.add(p);
+                String nome = campoNome.getText().trim();
+                int tamanho = Integer.parseInt(campoTamanho.getText().trim());
+                int prioridade = Integer.parseInt(campoPrioridade.getText().trim());
+                int tempo = Integer.parseInt(campoTempo.getText().trim());
 
-            boolean sucesso = switch (estrategia) {
-                case "primeiro encaixe" -> alocarPrimeiroEncaixe(p);
-                case "melhor encaixe" -> alocarMelhorEncaixe(p);
-                case "pior encaixe" -> alocarPiorEncaixe(p);
-                case "próximo encaixe" -> alocarProximoEncaixe(p);
-                default -> false;
-            };
-            if (sucesso) {
+                Processo p = new Processo(nome, tamanho, prioridade, tempo);
+                processos.add(p);
+                p.estado = EstadoProcesso.NOVO;
+                alocarPaginas(p);
                 modeloListaDeProcessos.addElement(p.toString());
+                atualizarStatusMemoria();
+                atualizarEstadoProcessos();
                 repaint();
-            } else {
-                JOptionPane.showMessageDialog(this, "Não foi possível alocar o processo.");
+            } catch (NumberFormatException ex) {
+                JOptionPane.showMessageDialog(this, "Campos inválidos.");
             }
-            atualizarStatusMemoria();
         });
 
         botaoReset.addActionListener(e -> {
             processos.clear();
             modeloListaDeProcessos.clear();
             blocosDeMemoria.forEach(BlocoDeMemoria::liberar);
-            proximoIndiceDeEncaixe = 0;
+            falhasDePagina = 0;
             atualizarStatusMemoria();
+            atualizarEstadoProcessos();
             repaint();
         });
 
         botaoSimularES.addActionListener(e -> {
-            if (processos.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "Nenhum processo em execução.");
-                return;
-            }
+            if (processos.isEmpty()) return;
+            Processo p = processos.get(new Random().nextInt(processos.size()));
             new Thread(() -> {
-                Processo p = processos.get(new Random().nextInt(processos.size()));
                 p.bloqueado = true;
+                p.estado = EstadoProcesso.BLOQUEADO;
+                atualizarEstadoProcessos();
                 repaint();
-                try {
-                    Thread.sleep(3000); // Simula espera por E/S
-                } catch (InterruptedException ignored) {}
+                try { Thread.sleep(3000); } catch (InterruptedException ignored) {}
                 p.bloqueado = false;
+                p.estado = EstadoProcesso.PRONTO;
+                atualizarEstadoProcessos();
                 repaint();
             }).start();
         });
 
+        new Thread(() -> {
+            while (true) {
+                try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
+                synchronized (processos) {
+                    processos.stream()
+                            .filter(p -> p.tempoRestante > 0 && !p.bloqueado)
+                            .max(Comparator.comparingInt(p -> p.prioridade))
+                            .ifPresent(proximo -> {
+                                proximo.emExecucao = true;
+                                proximo.estado = EstadoProcesso.EXECUTANDO;
+                                proximo.tempoRestante--;
+                                if (proximo.tempoRestante == 0) {
+                                    for (BlocoDeMemoria b : blocosDeMemoria) {
+                                        if (b.processo == proximo) b.liberar();
+                                    }
+                                    proximo.estado = EstadoProcesso.FINALIZADO;
+                                } else {
+                                    proximo.estado = EstadoProcesso.PRONTO;
+                                }
+                                proximo.emExecucao = false;
+                                SwingUtilities.invokeLater(() -> {
+                                    atualizarStatusMemoria();
+                                    atualizarEstadoProcessos();
+                                    repaint();
+                                });
+                            });
+                }
+            }
+        }).start();
+
         pack();
-        setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setVisible(true);
     }
 
-    private boolean alocarPrimeiroEncaixe(Processo p) {
-        for (BlocoDeMemoria bloco : blocosDeMemoria) {
-            if (bloco.estaLivre() && bloco.tamanho >= p.tamanho) {
-                bloco.alocar(p);
-                return true;
-            }
-        }
-        return false;
-    }
+    private void alocarPaginas(Processo p) {
+        for (Pagina pg : p.paginas) {
+            Optional<BlocoDeMemoria> livre = blocosDeMemoria.stream()
+                    .filter(b -> b.estaLivre() && b.tamanho >= 50)
+                    .findFirst();
 
-    private boolean alocarMelhorEncaixe(Processo p) {
-        BlocoDeMemoria melhor = null;
-        for (BlocoDeMemoria bloco : blocosDeMemoria) {
-            if (bloco.estaLivre() && bloco.tamanho >= p.tamanho) {
-                if (melhor == null || bloco.tamanho < melhor.tamanho) {
-                    melhor = bloco;
-                }
+            if (livre.isPresent()) {
+                livre.get().alocar(p, pg);
+            } else {
+                pg.emDisco = true;
+                falhasDePagina++;
             }
         }
-        if (melhor != null) {
-            melhor.alocar(p);
-            return true;
-        }
-        return false;
-    }
-
-    private boolean alocarPiorEncaixe(Processo p) {
-        BlocoDeMemoria pior = null;
-        for (BlocoDeMemoria bloco : blocosDeMemoria) {
-            if (bloco.estaLivre() && bloco.tamanho >= p.tamanho) {
-                if (pior == null || bloco.tamanho > pior.tamanho) {
-                    pior = bloco;
-                }
-            }
-        }
-        if (pior != null) {
-            pior.alocar(p);
-            return true;
-        }
-        return false;
-    }
-
-    private boolean alocarProximoEncaixe(Processo p) {
-        int n = blocosDeMemoria.size();
-        for (int i = 0; i < n; i++) {
-            int indice = (proximoIndiceDeEncaixe + i) % n;
-            BlocoDeMemoria bloco = blocosDeMemoria.get(indice);
-            if (bloco.estaLivre() && bloco.tamanho >= p.tamanho) {
-                bloco.alocar(p);
-                proximoIndiceDeEncaixe = (indice + 1) % n;
-                return true;
-            }
-        }
-        return false;
+        rotuloFalhaDePagina.setText("Falha de Paginas: " + falhasDePagina);
     }
 
     private void desenharBlocosDeMemoria(Graphics g) {
         int y = 20;
         for (BlocoDeMemoria bloco : blocosDeMemoria) {
-            g.setColor(bloco.processo == null ? Color.LIGHT_GRAY : (bloco.processo.bloqueado ? Color.ORANGE : Color.GREEN));
+            g.setColor(bloco.processo == null ? Color.LIGHT_GRAY :
+                    (bloco.processo.bloqueado ? Color.ORANGE :
+                            (bloco.processo.emExecucao ? Color.BLUE : Color.GREEN)));
             g.fillRect(50, y, 200, 40);
             g.setColor(Color.BLACK);
             g.drawRect(50, y, 200, 40);
-            g.drawString("Bloco " + bloco.id + ": " + bloco.tamanho + "KB", 60, y + 15);
-            if (bloco.processo != null) {
-                g.drawString(bloco.processo.nome + " (" + bloco.processo.tamanho + "KB)", 60, y + 35);
+            g.drawString("Página " + bloco.id + ": " + bloco.tamanho + "KB", 60, y + 15);
+            if (bloco.processo != null && bloco.pagina != null) {
+                g.drawString(bloco.processo.nome + " P" + bloco.pagina.id, 60, y + 35);
             }
             y += 60;
+        }
+
+        int yVirtual = y;
+        for (Processo p : processos) {
+            for (Pagina pg : p.paginas) {
+                if (pg.emDisco) {
+                    g.setColor(Color.RED);
+                    g.fillRect(300, yVirtual, 200, 20);
+                    g.setColor(Color.BLACK);
+                    g.drawRect(300, yVirtual, 200, 20);
+                    g.drawString(p.nome + " - Página " + pg.id + " (DISCO)", 310, yVirtual + 15);
+                    yVirtual += 30;
+                }
+            }
         }
     }
 
     private void atualizarStatusMemoria() {
-        int total = 0;
-        int ocupado = 0;
+        int total = 0, ocupado = 0;
         for (BlocoDeMemoria bloco : blocosDeMemoria) {
             total += bloco.tamanho;
-            if (bloco.processo != null) {
-                ocupado += bloco.tamanho;
-            }
+            if (bloco.processo != null) ocupado += bloco.tamanho;
         }
-        int livre = total - ocupado;
-        rotuloStatusMemoria.setText("Memória: Total: " + total + "KB | Ocupado: " + ocupado + "KB | Livre: " + livre + "KB");
+        rotuloStatusMemoria.setText("Memória: Total: " + total + "KB | Ocupado: " + ocupado + "KB | Livre: " + (total - ocupado) + "KB");
+    }
+
+    private void atualizarEstadoProcessos() {
+        painelEstadoProcessos.removeAll();
+        for (Processo p : processos) {
+            painelEstadoProcessos.add(new JLabel(p.nome + " - " + p.estado));
+        }
+        painelEstadoProcessos.revalidate();
+        painelEstadoProcessos.repaint();
     }
 
     public static void main(String[] args) {
@@ -228,6 +234,7 @@ public class SimuladorDeAlocacaoDeMemoria extends JFrame {
     static class BlocoDeMemoria {
         int id, tamanho;
         Processo processo;
+        Pagina pagina;
 
         BlocoDeMemoria(int id, int tamanho) {
             this.id = id;
@@ -238,27 +245,53 @@ public class SimuladorDeAlocacaoDeMemoria extends JFrame {
             return processo == null;
         }
 
-        void alocar(Processo p) {
+        void alocar(Processo p, Pagina pg) {
             this.processo = p;
+            this.pagina = pg;
+            pg.naMemoria = true;
         }
 
         void liberar() {
+            if (pagina != null) pagina.naMemoria = false;
+            this.pagina = null;
             this.processo = null;
         }
     }
 
     static class Processo {
         String nome;
-        int tamanho;
-        boolean bloqueado = false;
+        int tamanho, prioridade, tempoRestante;
+        boolean bloqueado = false, emExecucao = false;
+        EstadoProcesso estado = EstadoProcesso.NOVO;
+        List<Pagina> paginas = new ArrayList<>();
 
-        Processo(String nome, int tamanho) {
+        Processo(String nome, int tamanho, int prioridade, int tempoRestante) {
             this.nome = nome;
             this.tamanho = tamanho;
+            this.prioridade = prioridade;
+            this.tempoRestante = tempoRestante;
+            int totalPaginas = (int) Math.ceil(tamanho / 50.0);
+            for (int i = 0; i < totalPaginas; i++) {
+                paginas.add(new Pagina(i));
+            }
         }
 
         public String toString() {
-            return nome + " (" + tamanho + "KB)" + (bloqueado ? " [BLOQUEADO]" : "");
+            return nome + " (" + tamanho + "KB, P" + prioridade + ", T=" + tempoRestante + ")" +
+                    (bloqueado ? " [BLOQUEADO]" : "");
         }
+    }
+
+    static class Pagina {
+        int id;
+        boolean naMemoria = false, emDisco = false;
+
+        Pagina(int id) {
+            this.id = id;
+        }
+    }
+
+    enum EstadoProcesso {
+        NOVO, PRONTO, EXECUTANDO, BLOQUEADO, FINALIZADO
     }
 }
