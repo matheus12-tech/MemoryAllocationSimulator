@@ -1,34 +1,41 @@
-import javax.swing.*;
-import java.awt.*;
-import java.util.*;
+import javax.swing.*;  // Componentes gráficos (botões, textos, painéis...)
+import java.awt.*;     // Cores, layouts, desenho de formas
+import java.util.*;    // Listas, Random, etc
 import java.util.List;
 
 public class SimuladorDeAlocacaoDeMemoria extends JFrame {
+
+    // Componentes da interface
     private final JComboBox<String> opcoesEstrategia;
     private final DefaultListModel<String> modeloListaDeProcessos;
+
+    // Estrutura de dados
     private final List<BlocoDeMemoria> blocosDeMemoria;
     private final List<Processo> processos;
-    private final JPanel painelDeMemoria;
-    private final JPanel painelEstadoProcessos;
+
+    // Painéis e botões
+    private final JPanel painelDeMemoria, painelEstadoProcessos;
     private final JButton botaoDeAlocacao, botaoReset, botaoSimularES;
     private final JTextField campoNome, campoTamanho, campoPrioridade, campoTempo;
+
+    // Labels de status
     private final JLabel rotuloStatusMemoria, rotuloFalhaDePagina;
     private int falhasDePagina = 0;
 
     public SimuladorDeAlocacaoDeMemoria() {
-        super("Simulador de Alocação de Memória");
-        setLayout(new BorderLayout());
+        super("Simulador de Alocação de Memória"); // Título da janela
+        setLayout(new BorderLayout()); // Layout principal
 
+        // Estratégia fixa (por enquanto só paginação)
         opcoesEstrategia = new JComboBox<>(new String[] { "paginação" });
 
         modeloListaDeProcessos = new DefaultListModel<>();
         blocosDeMemoria = new ArrayList<>();
-        for (int i = 0; i < 10; i++) {
-            blocosDeMemoria.add(new BlocoDeMemoria(i, 50));
-        }
+        for (int i = 0; i < 10; i++) blocosDeMemoria.add(new BlocoDeMemoria(i, 50)); // 10 blocos de 50KB
 
         processos = new ArrayList<>();
 
+        // Interface de inserção de processo
         JPanel painelDeInsersao = new JPanel(new GridLayout(2, 1));
         JPanel painelDeProcesso = new JPanel();
         painelDeProcesso.add(new JLabel("Nome:"));
@@ -43,12 +50,14 @@ public class SimuladorDeAlocacaoDeMemoria extends JFrame {
         painelDeProcesso.add(new JLabel("Tempo:"));
         campoTempo = new JTextField(3);
         painelDeProcesso.add(campoTempo);
+
         botaoDeAlocacao = new JButton("Alocar");
         painelDeProcesso.add(botaoDeAlocacao);
         botaoReset = new JButton("Reiniciar");
         painelDeProcesso.add(botaoReset);
         botaoSimularES = new JButton("Simular E/S");
         painelDeProcesso.add(botaoSimularES);
+
         painelDeInsersao.add(painelDeProcesso);
 
         JPanel painelDeEstrategia = new JPanel();
@@ -58,18 +67,21 @@ public class SimuladorDeAlocacaoDeMemoria extends JFrame {
 
         add(painelDeInsersao, BorderLayout.NORTH);
 
+        // Painel gráfico de memória
         painelDeMemoria = new JPanel() {
             protected void paintComponent(Graphics g) {
                 super.paintComponent(g);
-                desenharBlocosDeMemoria(g);
+                desenharBlocosDeMemoria(g); // Desenha RAM e disco
             }
         };
         painelDeMemoria.setPreferredSize(new Dimension(600, 500));
         add(painelDeMemoria, BorderLayout.CENTER);
 
+        // Lista de processos
         JList<String> listaDeProcessos = new JList<>(modeloListaDeProcessos);
         add(new JScrollPane(listaDeProcessos), BorderLayout.EAST);
 
+        // Status de memória e falhas de página
         rotuloStatusMemoria = new JLabel();
         rotuloFalhaDePagina = new JLabel("Falha de Paginas: 0");
         JPanel painelInferior = new JPanel(new GridLayout(2, 1));
@@ -77,20 +89,24 @@ public class SimuladorDeAlocacaoDeMemoria extends JFrame {
         painelInferior.add(rotuloFalhaDePagina);
         add(painelInferior, BorderLayout.SOUTH);
 
+        // Painel que exibe o estado atual de cada processo
         painelEstadoProcessos = new JPanel(new GridLayout(0, 1));
         add(new JScrollPane(painelEstadoProcessos), BorderLayout.WEST);
 
+        // Clique no botão "Alocar"
         botaoDeAlocacao.addActionListener(e -> {
             try {
+                // Captura os dados dos campos
                 String nome = campoNome.getText().trim();
                 int tamanho = Integer.parseInt(campoTamanho.getText().trim());
                 int prioridade = Integer.parseInt(campoPrioridade.getText().trim());
                 int tempo = Integer.parseInt(campoTempo.getText().trim());
 
+                // Cria processo e tenta alocar
                 Processo p = new Processo(nome, tamanho, prioridade, tempo);
                 processos.add(p);
                 p.estado = EstadoProcesso.NOVO;
-                alocarPaginas(p);
+                alocarPaginas(p); // Tentativa de alocação
                 modeloListaDeProcessos.addElement(p.toString());
                 atualizarStatusMemoria();
                 atualizarEstadoProcessos();
@@ -100,6 +116,7 @@ public class SimuladorDeAlocacaoDeMemoria extends JFrame {
             }
         });
 
+        // Clique em "Reiniciar"
         botaoReset.addActionListener(e -> {
             processos.clear();
             modeloListaDeProcessos.clear();
@@ -110,6 +127,7 @@ public class SimuladorDeAlocacaoDeMemoria extends JFrame {
             repaint();
         });
 
+        // Clique em "Simular E/S"
         botaoSimularES.addActionListener(e -> {
             if (processos.isEmpty()) return;
             Processo p = processos.get(new Random().nextInt(processos.size()));
@@ -126,6 +144,7 @@ public class SimuladorDeAlocacaoDeMemoria extends JFrame {
             }).start();
         });
 
+        // Thread de escalonamento por prioridade
         new Thread(() -> {
             while (true) {
                 try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
@@ -156,12 +175,14 @@ public class SimuladorDeAlocacaoDeMemoria extends JFrame {
             }
         }).start();
 
+        // Finaliza construção da janela
         pack();
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setVisible(true);
     }
 
+    // Aloca páginas do processo, se possível. Senão: falha de página
     private void alocarPaginas(Processo p) {
         for (Pagina pg : p.paginas) {
             Optional<BlocoDeMemoria> livre = blocosDeMemoria.stream()
@@ -178,6 +199,7 @@ public class SimuladorDeAlocacaoDeMemoria extends JFrame {
         rotuloFalhaDePagina.setText("Falha de Paginas: " + falhasDePagina);
     }
 
+    // Desenha blocos ocupados/livres e páginas em disco
     private void desenharBlocosDeMemoria(Graphics g) {
         int y = 20;
         for (BlocoDeMemoria bloco : blocosDeMemoria) {
@@ -194,6 +216,7 @@ public class SimuladorDeAlocacaoDeMemoria extends JFrame {
             y += 60;
         }
 
+        // Exibe páginas em disco
         int yVirtual = y;
         for (Processo p : processos) {
             for (Pagina pg : p.paginas) {
@@ -209,6 +232,7 @@ public class SimuladorDeAlocacaoDeMemoria extends JFrame {
         }
     }
 
+    // Atualiza o label de memória (total, ocupada, livre)
     private void atualizarStatusMemoria() {
         int total = 0, ocupado = 0;
         for (BlocoDeMemoria bloco : blocosDeMemoria) {
@@ -218,6 +242,7 @@ public class SimuladorDeAlocacaoDeMemoria extends JFrame {
         rotuloStatusMemoria.setText("Memória: Total: " + total + "KB | Ocupado: " + ocupado + "KB | Livre: " + (total - ocupado) + "KB");
     }
 
+    // Atualiza painel lateral com os estados dos processos
     private void atualizarEstadoProcessos() {
         painelEstadoProcessos.removeAll();
         for (Processo p : processos) {
@@ -231,6 +256,7 @@ public class SimuladorDeAlocacaoDeMemoria extends JFrame {
         SwingUtilities.invokeLater(SimuladorDeAlocacaoDeMemoria::new);
     }
 
+    // Bloco de memória de 50KB que pode conter uma página
     static class BlocoDeMemoria {
         int id, tamanho;
         Processo processo;
@@ -258,6 +284,7 @@ public class SimuladorDeAlocacaoDeMemoria extends JFrame {
         }
     }
 
+    // Representa um processo com páginas e tempo de execução
     static class Processo {
         String nome;
         int tamanho, prioridade, tempoRestante;
@@ -270,6 +297,8 @@ public class SimuladorDeAlocacaoDeMemoria extends JFrame {
             this.tamanho = tamanho;
             this.prioridade = prioridade;
             this.tempoRestante = tempoRestante;
+
+            // Cria as páginas necessárias
             int totalPaginas = (int) Math.ceil(tamanho / 50.0);
             for (int i = 0; i < totalPaginas; i++) {
                 paginas.add(new Pagina(i));
@@ -282,6 +311,7 @@ public class SimuladorDeAlocacaoDeMemoria extends JFrame {
         }
     }
 
+    // Página de um processo
     static class Pagina {
         int id;
         boolean naMemoria = false, emDisco = false;
@@ -291,6 +321,7 @@ public class SimuladorDeAlocacaoDeMemoria extends JFrame {
         }
     }
 
+    // Enum com estados possíveis de um processo
     enum EstadoProcesso {
         NOVO, PRONTO, EXECUTANDO, BLOQUEADO, FINALIZADO
     }
