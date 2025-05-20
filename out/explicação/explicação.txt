@@ -1,0 +1,128 @@
+Esse conjunto de códigos implementa um **simulador visual de alocação de memória com paginação, escalonamento e simulação de E/S** usando Java e Swing.
+
+Aqui está um resumo **do que cada parte faz**:
+
+---
+
+### 🧱 **1. Inicialização da memória**
+
+```java
+blocosDeMemoria = new ArrayList<>();
+for (int i = 0; i < 10; i++) blocosDeMemoria.add(new BlocoDeMemoria(i, 50));
+```
+
+* Cria 10 blocos de memória de 50KB cada (representam a RAM paginada).
+* Cada bloco pode armazenar **1 página** de 50KB de um processo.
+
+---
+
+### ➕ **2. Criação e alocação de processo**
+
+```java
+botaoDeAlocacao.addActionListener(e -> {
+    ...
+    Processo p = new Processo(...);
+    alocarPaginas(p);
+});
+```
+
+* Ao clicar no botão, o programa:
+
+  * Lê os dados inseridos pelo usuário (nome, tamanho, prioridade, tempo).
+  * Cria um processo com **páginas de 50KB**.
+  * Tenta alocar as páginas nos blocos de memória.
+  * Se não houver espaço, ocorre **falha de página** e a página vai para o "disco".
+
+---
+
+### 📄 **3. Função de alocação com controle de falha de página**
+
+```java
+private void alocarPaginas(Processo p) { ... }
+```
+
+* Para cada página do processo:
+
+  * Tenta achar um bloco livre.
+  * Se achar: aloca.
+  * Se não: marca a página como **em disco** e contabiliza a **falha de página**.
+
+---
+
+### 🖼️ **4. Desenho das páginas em disco**
+
+```java
+if (pg.emDisco) { ... }
+```
+
+* Desenha as páginas em vermelho no painel (representando que estão no disco, não na RAM).
+
+---
+
+### ⏱️ **5. Escalonamento por prioridade**
+
+```java
+new Thread(() -> {
+    while (true) {
+        ...
+        processos.stream()
+            .filter(p -> ...)
+            .max(Comparator.comparingInt(p -> p.prioridade))
+            .ifPresent(proximo -> { ... });
+    }
+}).start();
+```
+
+* A cada 1 segundo:
+
+  * Escolhe o processo **pronto com maior prioridade**.
+  * Executa 1 unidade de tempo.
+  * Se terminou: libera os blocos de memória.
+  * Atualiza o estado (EXECUTANDO, PRONTO, FINALIZADO).
+
+---
+
+### 🔄 **6. Simulação de Entrada/Saída**
+
+```java
+botaoSimularES.addActionListener(e -> {
+    ...
+    p.bloqueado = true;
+    Thread.sleep(3000);
+    p.bloqueado = false;
+});
+```
+
+* Ao clicar, um processo aleatório entra no estado **BLOQUEADO** por 3 segundos.
+* Depois volta ao estado **PRONTO**.
+
+---
+
+### 📊 **7. Interface atualizada dinamicamente**
+
+* `atualizarStatusMemoria()`: Mostra quanto da RAM está ocupada/livre.
+* `atualizarEstadoProcessos()`: Lista os processos e seus estados no painel lateral.
+* `repaint()`: Redesenha a interface gráfica.
+
+---
+
+### 🧠 **Classes principais**
+
+* `Processo`: Representa o processo com páginas, tempo e prioridade.
+* `Pagina`: Representa uma página do processo (na memória ou em disco).
+* `BlocoDeMemoria`: Representa um bloco de RAM que pode conter uma página.
+* `EstadoProcesso`: Enum com os estados do processo (NOVO, PRONTO, etc).
+
+---
+
+### ✅ **Resumo final**
+
+Esse simulador:
+
+* Divide os processos em **páginas de 50KB**.
+* Aloca páginas na RAM ou manda para o disco (falha de página).
+* Usa **escalonamento por prioridade**, onde o processo com maior prioridade é executado primeiro.
+* Permite simular **operações de E/S**, bloqueando temporariamente processos.
+* Atualiza visualmente o estado de memória e dos processos.
+
+Se quiser, posso te ajudar a montar um slide ou explicação oral disso também.
